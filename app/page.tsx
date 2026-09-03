@@ -1,9 +1,7 @@
 "use client";
 
 import { AudioLines, Check, ChevronDown, CircleHelp, Clapperboard, Download, FileVideo, FolderOpen, Gauge, Maximize2, Music2, Pause, Play, Plus, Scissors, Sparkles, Subtitles, Upload, Volume2, Wand2, X } from "lucide-react";
-import { useMutation } from "convex/react";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import { api } from "@/convex/_generated/api";
 
 type MediaAsset = { name: string; url: string };
 
@@ -36,7 +34,6 @@ export default function Home() {
   const [saved, setSaved] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const saveToConvex = useMutation(api.cutlyProjects.upsert);
 
   const activeCaption = useMemo(() => {
     const lines = captions.split("\n").filter(Boolean);
@@ -67,11 +64,8 @@ export default function Home() {
     if (musicRef.current) { musicRef.current.currentTime = Math.max(0, element.currentTime - start); musicRef.current.play(); }
     if (voiceRef.current) { voiceRef.current.currentTime = Math.max(0, element.currentTime - start); voiceRef.current.play(); }
   }
-  async function saveProject() {
+  function saveProject() {
     window.localStorage.setItem("cutly-editor-project", JSON.stringify({ name: projectName, speed, captions, musicVolume }));
-    const ownerKey = window.localStorage.getItem("cutly-owner-key") || crypto.randomUUID();
-    window.localStorage.setItem("cutly-owner-key", ownerKey);
-    await saveToConvex({ ownerKey, title: projectName, settings: { speed, captions, captionsEnabled: captionsOn, musicVolume } });
     setSaved(true); window.setTimeout(() => setSaved(false), 1800);
   }
   async function exportVideo() {
