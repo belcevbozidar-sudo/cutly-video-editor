@@ -115,10 +115,20 @@ export default function Home() {
       await ffmpeg.load({ coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"), wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm") });
       setExportStatus("Обработвам видеото…");
       await ffmpeg.writeFile("input", await fetchFile(video.file));
+      if (music?.file) await ffmpeg.writeFile("music", await fetchFile(music.file));
+      if (voice?.file) await ffmpeg.writeFile("voice", await fetchFile(voice.file));
       const from = start.toFixed(3); const until = end.toFixed(3);
-      const args = middleCutOn && middleCutEnd > middleCutStart
-        ? ["-i", "input", "-filter_complex", `[0:v]trim=start=${from}:end=${middleCutStart.toFixed(3)},setpts=PTS-STARTPTS[v0];[0:a]atrim=start=${from}:end=${middleCutStart.toFixed(3)},asetpts=PTS-STARTPTS[a0];[0:v]trim=start=${middleCutEnd.toFixed(3)}:end=${until},setpts=PTS-STARTPTS[v1];[0:a]atrim=start=${middleCutEnd.toFixed(3)}:end=${until},asetpts=PTS-STARTPTS[a1];[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]`, "-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-c:a", "aac", "output.mp4"]
-        : ["-ss", from, "-to", until, "-i", "input", "-c:v", "libx264", "-c:a", "aac", "-movflags", "+faststart", "output.mp4"];
+      const videoFilter = `setpts=PTS/${speed},eq=brightness=${((brightness - 100) / 200).toFixed(2)}:contrast=${(contrast / 100).toFixed(2)}:saturation=${(saturation / 100).toFixed(2)}`;
+      const sourceFilter = middleCutOn && middleCutEnd > middleCutStart
+        ? `[0:v]trim=start=${from}:end=${middleCutStart.toFixed(3)},setpts=PTS-STARTPTS[v0];[0:v]trim=start=${middleCutEnd.toFixed(3)}:end=${until},setpts=PTS-STARTPTS[v1];[v0][v1]concat=n=2:v=1:a=0[basev];[0:a]atrim=start=${from}:end=${middleCutStart.toFixed(3)},asetpts=PTS-STARTPTS[a0];[0:a]atrim=start=${middleCutEnd.toFixed(3)}:end=${until},asetpts=PTS-STARTPTS[a1];[a0][a1]concat=n=2:v=0:a=1[basea]`
+        : `[0:v]trim=start=${from}:end=${until},setpts=PTS-STARTPTS[basev];[0:a]atrim=start=${from}:end=${until},asetpts=PTS-STARTPTS[basea]`;
+      const inputs = ["-i", "input"];
+      const audioMix = ["[basea]atempo=" + speed + ",volume=1[a0]"];
+      const mixLabels = ["[a0]"];
+      if (music?.file) { inputs.push("-stream_loop", "-1", "-i", "music"); audioMix.push(`[1:a]volume=${(musicVolume / 100).toFixed(2)}[a1]`); mixLabels.push("[a1]"); }
+      if (voice?.file) { const voiceIndex = music?.file ? 2 : 1; inputs.push("-i", "voice"); audioMix.push(`[${voiceIndex}:a]volume=${(voiceVolume / 100).toFixed(2)}[a2]`); mixLabels.push("[a2]"); }
+      const complex = `${sourceFilter};[basev]${videoFilter}[v];${audioMix.join(";")};${mixLabels.join("")}amix=inputs=${mixLabels.length}:duration=first:dropout_transition=1[a]`;
+      const args = [...inputs, "-filter_complex", complex, "-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-c:a", "aac", "-movflags", "+faststart", "output.mp4"];
       await ffmpeg.exec(args);
       const data = await ffmpeg.readFile("output.mp4") as Uint8Array;
       const copy = new Uint8Array(data.byteLength); copy.set(data);
